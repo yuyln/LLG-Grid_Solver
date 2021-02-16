@@ -39,6 +39,8 @@ Cord ***s0, ***s, ***H, ***dsdt, ***pos, ***Heff;
 Cord ***aux, *desc_, *r1, *r2;
 ArgCampoEff *agrseff;
 ArgCampo *campoext;
+Cord ***jj;
+Cord *saida;
 ArgGrid *variavel_integra;
 FILE *fp, *ani, *dados, *field, *posf;
 Cord *vects[numthreads * 2];
@@ -59,6 +61,7 @@ void inicia(){
 	fp = fopen("out.dat", "w+");
 	field = fopen("field.dat", "w+");
 	posf = fopen("pos.dat", "w+");
+	jj = malloc(sizeof(Cord) * nspinx * nspiny);
 	s0 = malloc(sizeof(Cord) * nspinx * nspiny);
 	aux = malloc(sizeof(Cord) * nspinx * nspiny);
 	pos = malloc(sizeof(Cord) * nspinx * nspiny);
@@ -68,6 +71,7 @@ void inicia(){
 	dsdt = malloc(sizeof(Cord) * nspinx * nspiny);
 	r1 = malloc(sizeof(Cord));
 	r2 = malloc(sizeof(Cord));
+	saida = malloc(sizeof(Cord));
 	campoext = malloc(sizeof(ArgCampo));
 	variavel_integra = malloc(sizeof(ArgGrid));
 	desc_ = malloc(sizeof(Cord));
@@ -78,6 +82,7 @@ void inicia(){
 		s0[i] = malloc(sizeof(Cord) * nspiny);
 		aux[i] = malloc(sizeof(Cord) * nspiny);
 		pos[i] = malloc(sizeof(Cord) * nspiny);
+		jj[i] = malloc(sizeof(Cord) * nspiny);
 		s[i] = malloc(sizeof(Cord) * nspiny);
 		H[i] = malloc(sizeof(Cord) * nspiny);
 		Heff[i] = malloc(sizeof(Cord) * nspiny);
@@ -88,6 +93,7 @@ void inicia(){
 			s0[i][j] = malloc(sizeof(Cord));
 			aux[i][j] = malloc(sizeof(Cord));
 			pos[i][j] = malloc(sizeof(Cord));
+			jj[i][j] = malloc(sizeof(Cord));
 			s[i][j] = malloc(sizeof(Cord));
 			H[i][j] = malloc(sizeof(Cord));
 			dsdt[i][j] = malloc(sizeof(Cord));
@@ -98,6 +104,9 @@ void inicia(){
 			pos[i][j]->x = i;
 			pos[i][j]->y = j;
 			pos[i][j]->z = 0;
+			jj[i][j]->x = 1.0;
+			jj[i][j]->y = 0.0;
+			jj[i][j]->z = 0.0;
 			calccampo((void*)&init);
 		}
 	}
@@ -163,7 +172,11 @@ void* Calcdsdt(void* arg){
 	args->j_ = k_->j_;
 	args->desc_ = desc_;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[1]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[1]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[1]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[1]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[1]));
 	r1->x = vects[1]->x * h;
 	r1->y = vects[1]->y * h;
 	r1->z = vects[1]->z * h;
@@ -171,7 +184,11 @@ void* Calcdsdt(void* arg){
 
 	args->desc_ = r1;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[1]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[1]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[1]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[1]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[1]));
 	r2->x = vects[1]->x * h;
 	r2->y = vects[1]->y * h;
 	r2->z = vects[1]->z * h;

@@ -31,7 +31,9 @@ void Reset();
 ArgCross *SetParam(Cord* vetor1, Cord* vetor2, Cord* vetorRes);
 
 Cord ***s0, ***s, ***H, ***dsdt, ***pos, ***Heff;
+Cord ***jj;
 Cord ***aux;
+Cord *saida;
 ArgCampo *campoext;
 ArgGrid *variavel_integra;
 FILE *fp, *ani, *dados, *field, *posf;
@@ -39,7 +41,7 @@ Cord *vects[numthreads * 2];
 pthread_t threads[numthreads];
 int i, j;
 int n = 1000;
-int nspinx = 1, nspiny = 1;
+int nspinx = 30, nspiny = 30;
 double tmax = 10.0;
 double tmin = 0.0;
 double lambda = 0.1;
@@ -57,15 +59,18 @@ void inicia(){
 	aux = malloc(sizeof(Cord) * nspinx * nspiny);
 	pos = malloc(sizeof(Cord) * nspinx * nspiny);
 	s = malloc(sizeof(Cord) * nspinx * nspiny);
+	jj = malloc(sizeof(Cord) * nspinx * nspiny);
 	H = malloc(sizeof(Cord) * nspinx * nspiny);
 	Heff = malloc(sizeof(Cord) * nspinx * nspiny);
 	dsdt = malloc(sizeof(Cord) * nspinx * nspiny);
+	saida = malloc(sizeof(Cord));
 	campoext = malloc(sizeof(ArgCampo));
 	variavel_integra = malloc(sizeof(ArgGrid));
 	ArgCampo init;
 	init.t_ = 0.0;
 	for(i = 0; i < nspinx; i++){
 		s0[i] = malloc(sizeof(Cord) * nspiny);
+		jj[i] = malloc(sizeof(Cord) * nspiny);
 		aux[i] = malloc(sizeof(Cord) * nspiny);
 		pos[i] = malloc(sizeof(Cord) * nspiny);
 		s[i] = malloc(sizeof(Cord) * nspiny);
@@ -79,15 +84,19 @@ void inicia(){
 			aux[i][j] = malloc(sizeof(Cord));
 			pos[i][j] = malloc(sizeof(Cord));
 			s[i][j] = malloc(sizeof(Cord));
+			jj[i][j] = malloc(sizeof(Cord));
 			H[i][j] = malloc(sizeof(Cord));
 			dsdt[i][j] = malloc(sizeof(Cord));
 			Heff[i][j] = malloc(sizeof(Cord));
-			s0[i][j]->x = (double) (1.0) / sqrt(1.0);
-			s0[i][j]->y = (double) (1.0) / sqrt(1.0);
-			s0[i][j]->z = (double) (1.0) / sqrt(1.0);
+			s0[i][j]->x = (double) (1.0) / sqrt(3.0);
+			s0[i][j]->y = (double) (1.0) / sqrt(3.0);
+			s0[i][j]->z = (double) (1.0) / sqrt(3.0);
 			pos[i][j]->x = i;
 			pos[i][j]->y = j;
 			pos[i][j]->z = 0;
+			jj[i][j]->x = 1.0;
+			jj[i][j]->y = 0.0;
+			jj[i][j]->z = 0.0;
 			calccampo((void*)&init);
 		}
 	}
@@ -140,19 +149,24 @@ void* calccampoeff(void *k){
 	Heff[k_->i_][k_->j_]->x = hmmm->x - lambda * vects[0]->x; //inverte o sinal pq inverte no produto cross
 	Heff[k_->i_][k_->j_]->y = hmmm->y - lambda * vects[0]->y;
 	Heff[k_->i_][k_->j_]->z = hmmm->z - lambda * vects[0]->z;
-	
+	free(hmmm);
+	return NULL;
 }
 
 
 void* Calcdsdt(void* arg){
 	ArgGrid *k_ = (ArgGrid*) arg;
 	calccampoeff(arg);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
+	calcvect((void*)SetParam(s0[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[1]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[1]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[1]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[1]->z;
+	calcvect((void*)SetParam(s0[k_->i_][k_->j_], saida, vects[1]));
 	dsdt[k_->i_][k_->j_]->x = vects[1]->x;
 	dsdt[k_->i_][k_->j_]->y = vects[1]->y;
 	dsdt[k_->i_][k_->j_]->z = vects[1]->z;
 	reseta();
-
+	return NULL;
 }
 
 void* calcvect(void *arg){
@@ -160,6 +174,7 @@ void* calcvect(void *arg){
 	k->vetorRes->x = k->vetor1->y * k->vetor2->z - k->vetor1->z * k->vetor2->y;
 	k->vetorRes->y = -(k->vetor1->x * k->vetor2->z - k->vetor1->z * k->vetor2->x);
 	k->vetorRes->z = k->vetor1->x * k->vetor2->y - k->vetor1->y * k->vetor2->x;
+	free(k);
 }
 
 ArgCross *SetParam(Cord* vetor1, Cord* vetor2, Cord* vetorRes){

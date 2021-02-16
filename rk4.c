@@ -38,15 +38,18 @@ ArgCross *SetParam(Cord* vetor1, Cord* vetor2, Cord* vetorRes);
 
 Cord ***s0, ***s, ***H, ***dsdt, ***pos, ***Heff;
 Cord ***aux, *desc_, *r1, *r2, *r3, *r4;
+Cord ***jj;
+Cord *saida;
 ArgCampoEff *agrseff;
 ArgCampo *campoext;
 ArgGrid *variavel_integra;
 FILE *fp, *ani, *dados, *field, *posf;
 Cord *vects[numthreads * 2];
+ArgCampoEff *args;
 pthread_t threads[numthreads];
 int i, j;
 int n = 1000;
-int nspinx = 2, nspiny = 2;
+int nspinx = 30, nspiny = 30;
 double tmax = 10.0;
 double tmin = 0.0;
 double lambda = 0.1;
@@ -58,12 +61,12 @@ int corte = 10;
 void inicia(){
 	h = (tmax - tmin) / n;
 	fp = fopen("out.dat", "w+");
-	field = fopen("field.dat", "w+");
 	posf = fopen("pos.dat", "w+");
 	s0 = malloc(sizeof(Cord) * nspinx * nspiny);
 	aux = malloc(sizeof(Cord) * nspinx * nspiny);
 	pos = malloc(sizeof(Cord) * nspinx * nspiny);
 	s = malloc(sizeof(Cord) * nspinx * nspiny);
+	jj = malloc(sizeof(Cord) * nspinx * nspiny);
 	H = malloc(sizeof(Cord) * nspinx * nspiny);
 	Heff = malloc(sizeof(Cord) * nspinx * nspiny);
 	dsdt = malloc(sizeof(Cord) * nspinx * nspiny);
@@ -71,10 +74,12 @@ void inicia(){
 	r2 = malloc(sizeof(Cord));
 	r3 = malloc(sizeof(Cord));
 	r4 = malloc(sizeof(Cord));
+	saida = malloc(sizeof(Cord));
 	campoext = malloc(sizeof(ArgCampo));
 	variavel_integra = malloc(sizeof(ArgGrid));
 	desc_ = malloc(sizeof(Cord));
 	desc_->x = desc_->y = desc_->z = 0.0;
+	args = malloc(sizeof(ArgCampoEff));
 	ArgCampo init;
 	init.t_ = 0.0;
 	for(i = 0; i < nspinx; i++){
@@ -82,6 +87,7 @@ void inicia(){
 		aux[i] = malloc(sizeof(Cord) * nspiny);
 		pos[i] = malloc(sizeof(Cord) * nspiny);
 		s[i] = malloc(sizeof(Cord) * nspiny);
+		jj[i] = malloc(sizeof(Cord) * nspiny);
 		H[i] = malloc(sizeof(Cord) * nspiny);
 		Heff[i] = malloc(sizeof(Cord) * nspiny);
 		dsdt[i] = malloc(sizeof(Cord) * nspiny);
@@ -92,15 +98,26 @@ void inicia(){
 			aux[i][j] = malloc(sizeof(Cord));
 			pos[i][j] = malloc(sizeof(Cord));
 			s[i][j] = malloc(sizeof(Cord));
+			jj[i][j] = malloc(sizeof(Cord));
 			H[i][j] = malloc(sizeof(Cord));
 			dsdt[i][j] = malloc(sizeof(Cord));
 			Heff[i][j] = malloc(sizeof(Cord));
-			s0[i][j]->x = random();
-			s0[i][j]->y = random();
-			s0[i][j]->z = random();
+			s0[i][j]->x = 2.0 * random() - 1.0;
+			s0[i][j]->y = 2.0 * random() - 1.0;
+			s0[i][j]->z = 2.0 * random() - 1.0;
+			double norm = sqrt(s0[i][j]->x * s0[i][j]->x + s0[i][j]->y * s0[i][j]->y + s0[i][j]->z * s0[i][j]->z);
+			s0[i][j]->x = s0[i][j]->x / norm;
+			s0[i][j]->y = s0[i][j]->y / norm;
+			s0[i][j]->z = s0[i][j]->z / norm;
+			/*s0[i][j]->x = 1.0 / sqrt(3.0);
+			s0[i][j]->y = 1.0 / sqrt(3.0);
+			s0[i][j]->z = 1.0 / sqrt(3.0);*/
 			pos[i][j]->x = i;
 			pos[i][j]->y = j;
 			pos[i][j]->z = 0;
+			jj[i][j]->x = 0.0;
+			jj[i][j]->y = 0.0;
+			jj[i][j]->z = 0.0;
 			calccampo((void*)&init);
 		}
 	}
@@ -115,7 +132,7 @@ void* calccampo(void *k){
 	ArgCampo* k_ = (ArgCampo*) k;
 	H[k_->i_][k_->j_]->x = 0.0;
 	H[k_->i_][k_->j_]->y = 0.0;
-	H[k_->i_][k_->j_]->z = 1.0;
+	H[k_->i_][k_->j_]->z = 0.0;
 	return NULL;
 }
 
@@ -160,17 +177,21 @@ void* calccampoeff(void *k){
 	Heff[k_->i_][k_->j_]->x = hmmm->x - lambda * vects[0]->x; //inverte o sinal pq inverte no produto cross
 	Heff[k_->i_][k_->j_]->y = hmmm->y - lambda * vects[0]->y;
 	Heff[k_->i_][k_->j_]->z = hmmm->z - lambda * vects[0]->z;
+	free(hmmm);
 }
 
 
 void* Calcdsdt(void* arg){
 	ArgGrid *k_ = (ArgGrid*) arg;
-	ArgCampoEff *args = malloc(sizeof(ArgCampoEff));
 	args->i_ = k_->i_;
 	args->j_ = k_->j_;
 	args->desc_ = desc_;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[1]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[1]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[1]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[1]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[1]));
 	r1->x = vects[1]->x * h / 2.0;
 	r1->y = vects[1]->y * h / 2.0;
 	r1->z = vects[1]->z * h / 2.0;
@@ -178,38 +199,51 @@ void* Calcdsdt(void* arg){
 
 	args->desc_ = r1;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
-	r2->x = vects[1]->x * h / 2.0;
-	r2->y = vects[1]->y * h / 2.0;
-	r2->z = vects[1]->z * h / 2.0;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[2]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[2]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[2]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[2]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[2]));
+	r2->x = vects[2]->x * h / 2.0;
+	r2->y = vects[2]->y * h / 2.0;
+	r2->z = vects[2]->z * h / 2.0;
 	reseta();
 
 	args->desc_ = r2;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
-	r3->x = vects[1]->x * h;
-	r3->y = vects[1]->y * h;
-	r3->z = vects[1]->z * h;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[3]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[3]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[3]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[3]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[3]));
+	r3->x = vects[3]->x * h;
+	r3->y = vects[3]->y * h;
+	r3->z = vects[3]->z * h;
 	reseta();
 
 	args->desc_ = r3;
 	calccampoeff((void*) args);
-	calcvect((void*)SetParam(aux[k_->i_][k_->j_], Heff[k_->i_][k_->j_], vects[1]));
-	r4->x = vects[1]->x * h;
-	r4->y = vects[1]->y * h;
-	r4->z = vects[1]->z * h;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], jj[k_->i_][k_->j_], vects[4]));
+	saida->x = Heff[k_->i_][k_->j_]->x + vects[4]->x;
+	saida->y = Heff[k_->i_][k_->j_]->y + vects[4]->y;
+	saida->z = Heff[k_->i_][k_->j_]->z + vects[4]->z;
+	calcvect((void*)SetParam(aux[k_->i_][k_->j_], saida, vects[4]));
+	r4->x = vects[4]->x * h;
+	r4->y = vects[4]->y * h;
+	r4->z = vects[4]->z * h;
 	reseta();
-
 	dsdt[k_->i_][k_->j_]->x = (2.0 * r1->x + 4.0 * r2->x + 2.0 * r3->x + r4->x) / 6.0;
 	dsdt[k_->i_][k_->j_]->y = (2.0 * r1->y + 4.0 * r2->y + 2.0 * r3->y + r4->y) / 6.0;
-	dsdt[k_->i_][k_->j_]->z = (2.0 * r1->z + 4.0 * r2->z + 2.0 * r3->z + r4->z) / 6.0;;
+	dsdt[k_->i_][k_->j_]->z = (2.0 * r1->z + 4.0 * r2->z + 2.0 * r3->z + r4->z) / 6.0;
 }
+
 
 void* calcvect(void *arg){
 	ArgCross* k = (ArgCross*) arg;
 	k->vetorRes->x = k->vetor1->y * k->vetor2->z - k->vetor1->z * k->vetor2->y;
 	k->vetorRes->y = -(k->vetor1->x * k->vetor2->z - k->vetor1->z * k->vetor2->x);
 	k->vetorRes->z = k->vetor1->x * k->vetor2->y - k->vetor1->y * k->vetor2->x;
+	free(k);
 }
 
 ArgCross *SetParam(Cord* vetor1, Cord* vetor2, Cord* vetorRes){
@@ -261,23 +295,22 @@ void Integra(){
 				att((void*)variavel_integra);
 			}
 		}
-		Reset();
 		escreve(&t);
+		Reset();
 	}
 }
-
+int aux___ = 0;
 void escreve(int *i){
 	if(*i % corte == 0){
-		for(int i = 0; i < nspinx; i++){
-			for(int j = 0; j < nspiny; j++){
-				fprintf(fp, "%.12f \t %.12f \t %.12f \t ", s[i][j]->x, s[i][j]->y, s[i][j]->z);
-				fprintf(field, "%.12f \t %.12f \t %.12f \t ", H[i][j]->x, H[i][j]->y, H[i][j]->z);
-				fprintf(posf, "%.12f \t %.12f \t %.12f \t ", pos[i][j]->x, pos[i][j]->y, pos[i][j]->z);
+		for(int i_ = 0; i_ < nspinx; i_++){
+			for(int j_ = 0; j_ < nspiny; j_++){
+				fprintf(fp, "%.12f \t %.12f \t %.12f \t ", s[i_][j_]->x, s[i_][j_]->y, s[i_][j_]->z);
+				fprintf(posf, "%.12f \t %.12f \t %.12f \t ", pos[i_][j_]->x, pos[i_][j_]->y, pos[i_][j_]->z);
 			}
 		}
 		fprintf(fp, "\n");
-		fprintf(field, "\n");
 		fprintf(posf, "\n");
+		aux___+=1;
 	}
 }
 
